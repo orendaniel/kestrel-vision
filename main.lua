@@ -3,7 +3,6 @@
 kestrel = require "kestrel"
 local unixsocket = require "socket.unix"
 
-
 local conffile = arg[1]
 local source = arg[2]
 local comm = arg[3]
@@ -73,6 +72,7 @@ while true do
 	local image = device:readframe()
 	local bin = nil
 	local cnts = nil
+	
 	if conf.threshold ~= nil then
 		local cnts = {}
 		if conf.threshold.type == "rgb" then
@@ -99,7 +99,7 @@ while true do
 
 			if conf.threshold.ratio ~= nil then
 				local ratio = cnt_w / cnt_h
-				if ratio < (conf.threshold.ratio[1] or 0) or ratio > ( conf.threshold.ratio[2] or math.huge) then
+				if ratio < (conf.threshold.ratio[1] or 0) or ratio > (conf.threshold.ratio[2] or math.huge) then
 					cnts[i] = nil
 				end
 			end
@@ -127,14 +127,19 @@ while true do
 		local tokens = tokenize(command)
 		if command == "getimage" then
 			kestrel.write_pixelmap(image, comm .. "image.ppm")
+			os.execute("convert " .. comm .. "image.ppm " .. comm .. "image.png")
+
 			_, w, h = image:shape()
 			local buffer = kestrel.newimage(1, w, h)
-			for c=1,#(cnts or {}) do
-				for i, p in pairs(cnts[c]:totable()) do
-					buffer:setat(1, p.x, p.y, 255)
+			if cnts ~= nil then
+				for c=1,#(cnts or {}) do
+					for i, p in pairs(cnts[c]:totable()) do
+						buffer:setat(1, p.x, p.y, 255)
+					end
 				end
 			end
 			kestrel.write_pixelmap(buffer, comm .. "contours.ppm")
+			os.execute("convert " .. comm .. "contours.ppm " .. comm .. "contours.png")
 
 		elseif command == "saveconfig" then
 			local file = io.open(conffile, 'w+')
@@ -144,29 +149,39 @@ while true do
 		elseif command == "exit" then
 			break
 
-		elseif tokens[1] == 'set' then
+		elseif tokens[1] == 'set' and tokens[2] ~= nil and tokens[3] ~= nil then
 			conf[tokens[2]] = load('return ' .. tokens[3])()
 
 			if tokens[2] == 'fps' then os.execute("v4l2-ctl -p " .. tostring(conf.fps)) end
 
-		elseif tokens[1] == 'setv4l' then
+		elseif tokens[1] == 'setv4l' and tokens[2] ~= nil and tokens[3] ~= nil then
 			if conf.v4l == nil then conf.v4l = {} end
 			conf.v4l[tokens[2]] = tokens[3]
 			os.execute("v4l2-ctl -d " .. source .. " -c " .. tokens[2] .. "=" .. tostring(tokens[3]))
 
-		elseif tokens[1] == 'cleanv4l' then 
-			conf.v4l = nil
-
-		elseif tokens[1] == 'setthresh' then
+		elseif tokens[1] == 'setthresh' and tokens[2] ~= nil and tokens[3] ~= nil then
 			if conf.threshold == nil then conf.threshold = {} end
 			conf.threshold[tokens[2]] = load('return ' .. tokens[3])()
+
+		elseif tokens[1] == 'get' then
+			conn:send((conf[tokens[2]] or 'nil').. '\n')
+
+		elseif tokens[1] == 'getv4l' then
+			if conf.v4l == nil then conf.v4l = {} end
+			conn:send(conf.v4l[tokens[2]] .. '\n')
+
+		elseif tokens[1] == 'getthresh' then
+			if conf.threshold == nil then conf.threshold = {} end
+			conn:send(conf.threshold[tokens[2]] .. '\n')
 
 		elseif tokens[1] == 'cleanthresh' then 
 			conf.threshold = nil
 
+		elseif tokens[1] == 'cleanv4l' then 
+			conf.v4l = nil
+
 		end
 	end
-
 end
 
 device:close()
