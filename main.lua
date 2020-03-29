@@ -1,21 +1,15 @@
 #!/usr/bin/lua5.3
 
 kestrel = require "kestrel"
-local unixsocket = require "socket.unix"
+local socket = require "socket"
 
 local conffile = arg[1]
 local source = arg[2]
-local comm = arg[3]
+local port = arg[3]
 
 local conf = {}
 local device = nil
 local processor = function(image, contours) end
-
-local socket = assert(unixsocket())
-assert(socket:bind(comm .. 'socket'))
-assert(socket:listen())
-local conn = assert(socket:accept())
-conn:settimeout(0)
 
 local function dump(t)
 	if type(t) == 'table' then
@@ -28,14 +22,12 @@ local function dump(t)
 				v = '"' .. v .. '"'
 			end
 			local nested = dump(v) 
-			if nested ~= nil then
-				s = s .. '[' .. k .. '] = ' .. nested .. ', '
-			end
+			s = s .. '[' .. k .. '] = ' .. nested .. ', '
 		end
 		return s .. '} '
 	elseif type(t) == "number" or type(t) == "boolean" or type(t) == "string" then
 		return tostring(t)
-	end
+	else return "nil" end
 end
 
 local function tokenize(command) 
@@ -44,6 +36,12 @@ local function tokenize(command)
 		table.insert(tokens, t)
 	end
 	return tokens
+end
+
+local function cdrstr(str, d) -- cdr as in lisp
+	local res = str
+	for i=1,d do res, _ = res:gsub("^.-%s", "", 1) end
+	return res
 end
 
 if io.open(conffile, 'r') ~= nil then
@@ -56,7 +54,7 @@ else
 	device = kestrel.opendevice(source)
 end
 
-if conf.fps ~= nil then os.execute("v4l2-ctl -p " .. tostring(conf.fps)) end
+if conf.fps ~= nil then os.execute("v4l2-ctl -d ".. source .. " -p " .. tostring(conf.fps)) end
 
 if conf.v4l ~= nil then
 	for i, v in pairs(conf.v4l) do
@@ -65,8 +63,16 @@ if conf.v4l ~= nil then
 end
 
 if conf.processorfile ~= nil then
-	processor = dofile(conf.processorfile)
+	if io.open(conf.processorfile, 'r') ~= nil then
+		processor = dofile(conf.processorfile)
+	end
 end
+
+local tcp = socket.tcp()
+assert(tcp:bind("localhost", port))
+assert(tcp:listen())
+tcp:settimeout(0)
+local client
 
 while true do
 	local image = device:readframe()
@@ -88,7 +94,11 @@ while true do
 		end
 
 		if bin ~= nil then
-			cnts = kestrel.findcontours(bin, conf.tracesteps or 3, conf.tracesteps or 3)
+			if (conf.tracesteps or 0) > 0 then 
+				cnts = kestrel.findcontours(bin, conf.tracesteps, conf.tracesteps)
+			else
+				cnts = kestrel.findcontours(bin) 
+			end
 		end
 		
 		for i, cnt in pairs(cnts) do
@@ -120,68 +130,79 @@ while true do
 	end
 
 	if processor(image, cnts or {}) ~= nil then break end
-	
-	-- receive commands from unix port
-	local command = conn:receive()
-	if command ~= nil then
-		local tokens = tokenize(command)
-		if command == "getimage" then
-			kestrel.write_pixelmap(image, comm .. "image.ppm")
-			os.execute("convert " .. comm .. "image.ppm " .. comm .. "image.png")
+	print(os.time())
 
-			_, w, h = image:shape()
-			local buffer = kestrel.newimage(1, w, h)
-			if cnts ~= nil then
-				for c=1,#(cnts or {}) do
-					for i, p in pairs(cnts[c]:totable()) do
-						buffer:setat(1, p.x, p.y, 255)
+
+	-- tcp communication
+	local command = nil
+	if client == nil then client = tcp:accept() end	
+	
+	if client ~= nil then
+		command = client:receive()
+	end
+	if command == nil then client = nil 
+	else
+		print(command)
+		local tokens = tokenize(command)
+		if command == "quit" then client = nil 
+		elseif command == "stop" then break
+
+		elseif command == "save" then
+			local file = io.open(conffile, "w+")
+			file:write("return" .. dump(conf))
+			file:close()
+			client:send("done\n")
+
+		elseif tokens[1] == "shoot" then
+			local path
+			path, _ = cdrstr(command)
+			if path ~= "" and path:sub(1, 1) == '/' then
+				local w
+				local h
+				_, w, h = image:shape()
+				local buffer = kestrel.newimage(1, w, h)
+				if cnts ~= nil then
+					for i=1,#cnts do
+						for _, p in pairs(cnts[i]:totable()) do buffer:setat(1, p.x, p.y, 255) end
 					end
 				end
+				kestrel.write_pixelmap(image, path .. "/image.ppm")
+				kestrel.write_pixelmap(buffer, path .. "/contours.ppm")
+				os.execute("convert " .. path .. "/image.ppm " .. path .. "/image.jpg")
+				os.execute("convert " .. path .. "/contours.ppm " .. path .. "/contours.jpg")
+				client:send("done\n")
 			end
-			kestrel.write_pixelmap(buffer, comm .. "contours.ppm")
-			os.execute("convert " .. comm .. "contours.ppm " .. comm .. "contours.png")
 
-		elseif command == "saveconfig" then
-			local file = io.open(conffile, 'w+')
-			file:write('return ' .. dump(conf))
-			file:close()
+		elseif tokens[1] == "set" then
+			if tokens[2] == "v4l" then
+				conf.v4l[tokens[3]] = load("return " .. cdrstr(cdrstr(cdrstr(command))))()
+			elseif tokens[2] == "thresh" then
+				conf.threshold[tokens[3]] = load("return " .. cdrstr(command, 3))()
+			else
+				conf[tokens[2]] = load("return " .. cdrstr(command, 2))()
+			end
+			client:send("done\n")
 
-		elseif command == "exit" then
-			break
-
-		elseif tokens[1] == 'set' and tokens[2] ~= nil and tokens[3] ~= nil then
-			conf[tokens[2]] = load('return ' .. tokens[3])()
-
-			if tokens[2] == 'fps' then os.execute("v4l2-ctl -p " .. tostring(conf.fps)) end
-
-		elseif tokens[1] == 'setv4l' and tokens[2] ~= nil and tokens[3] ~= nil then
-			if conf.v4l == nil then conf.v4l = {} end
-			conf.v4l[tokens[2]] = tokens[3]
-			os.execute("v4l2-ctl -d " .. source .. " -c " .. tokens[2] .. "=" .. tostring(tokens[3]))
-
-		elseif tokens[1] == 'setthresh' and tokens[2] ~= nil and tokens[3] ~= nil then
-			if conf.threshold == nil then conf.threshold = {} end
-			conf.threshold[tokens[2]] = load('return ' .. tokens[3])()
-
-		elseif tokens[1] == 'get' then
-			conn:send((conf[tokens[2]] or 'nil').. '\n')
-
-		elseif tokens[1] == 'getv4l' then
-			if conf.v4l == nil then conf.v4l = {} end
-			conn:send(conf.v4l[tokens[2]] .. '\n')
-
-		elseif tokens[1] == 'getthresh' then
-			if conf.threshold == nil then conf.threshold = {} end
-			conn:send(conf.threshold[tokens[2]] .. '\n')
-
-		elseif tokens[1] == 'cleanthresh' then 
-			conf.threshold = nil
-
-		elseif tokens[1] == 'cleanv4l' then 
-			conf.v4l = nil
-
+		elseif tokens[1] == "get" then
+			if tokens[2] == "v4l" then
+				print(dump(conf.v4l[tokens[3]]))
+				client:send(dump(conf.v4l[tokens[3]]) .. "\n")
+			elseif tokens[2] == "thresh" then
+				if tokens[4] == "@" then
+					local index= tonumber(tokens[3])
+					print(dump(conf.threshold[tokens[5]][index]))
+					client:send(dump(conf.threshold[tokens[5]][index]) .. "\n")
+				else
+					print(dump(conf.threshold[tokens[3]]))
+					client:send(dump(conf.threshold[tokens[3]]) .. "\n")
+				end
+			else
+				print(dump(conf[tokens[2]]))
+				client:send(dump(conf[tokens[2]]) .. "\n")
+			end
 		end
 	end
 end
 
+tcp:close()
 device:close()

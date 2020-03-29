@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+	<form method = "POST">
+	<body>
+		<p>
+		<img src = "file:///tmp/comm/image.jpg"/>
+		<img src = "file:///tmp/comm/contours.jpg"/>
+		</p>
+		<input type="submit" name="submit" value="submit" action="submit">
+		<br>
+
+		<h3>resolution:</h3><input type="number" name="width" value={{ conf["width"] }}>
+		X
+		<input type="number" name="height" value={{ conf["height"] }}>
+		<h3>frames per second:</h3><input type="number" name="fps" value={{ conf["fps"] }}>
+		<h3>trace steps</h3><input type="number" name="tracesteps" value={{ conf["trace_steps"] }}>
+
+		<br>
+		
+		<p>
+
+			<p>
+			<select name="thresh_type">
+				<option value="nil">No thresholding</option>
+				<option value="rgb" {% if conf["threshold_type"] == "rgb" %} selected {% endif %}>RGB</option>
+				<option value="hsv" {% if conf["threshold_type"] == "hsv" %} selected {% endif %}>HSV</option>        
+				<option value="gray" {% if conf["threshold_type"] == "gray" %} selected {% endif %}>gray</option>
+			</select>
+			</p>
+
+			<p>
+			<h3>lower threshold</h3>
+			<input type="number" name="lower1" value={{ conf['lower'][0] }} min=0 max=255>
+			<input type="number" name="lower2" value={{ conf['lower'][1] }} min=0 max=255>
+			<input type="number" name="lower3" value={{ conf['lower'][2] }} min=0 max=255>
+			</p>
+
+			<p>
+			<h3>upper threshold</h3>
+			<input type="number" name="upper1" value={{ conf['upper'][0] }} min=0 max=255>
+			<input type="number" name="upper2" value={{ conf['upper'][1] }} min=0 max=255>
+			<input type="number" name="upper3" value={{ conf['upper'][2] }} min=0 max=255>
+			</p>
+
+			<br>
+
+			<p>
+			<h3>width to height ratio threshold</h3>
+			<input type="number" name="ratio1" min=0 step=0.01 value={{ conf["ratio"][0] }}>
+			<input type="number" name="ratio2" min=0 step=0.01 value={{ conf["ratio"][1] }}>
+			</p>
+
+			<p>
+			<h3>area threshold</h3>
+			<input type="number" name="area1" min=0 value={{ conf["area"][0] }}>
+			<input type="number" name="area2" min=0 value={{ conf["area"][1] }}>
+			</p>
+
+			<p>
+			<h3>solidity threshold</h3>
+			<input type="number" name="solidity1" min=0 max=1 step=0.01 value={{ conf["solidity"][0] }}>
+			<input type="number" name="solidity2" min=0 max=1 step=0.01 value={{ conf["solidity"][1] }}>
+			</p>
+		
+		</p>
+		<br>
+		<h3>V4L</h3>
+		<br>
+		<p>
+			{% for ctrl in v4l %}
+				<h3>{{ ctrl["name"] }}</h3>
+				{% if ctrl["type"] == "bool" %}
+					<input type="number" name="v4l {{ ctrl["name"] }}" value={{ ctrl["value"] }} min=0 max=1>
+				{% elif ctrl["type"] == "menu" %}
+					<input type="number" name="v4l {{ ctrl["name"] }}" min={{ ctrl["min"] }} max={{ ctrl["max"] }} value={{ ctrl["value"] }}>
+				{%else%}
+					<input type="number" name="v4l {{ ctrl["name"] }}" min={{ ctrl["min"] }} max={{ ctrl["max"] }} value={{ ctrl["value"] }} step={{ ctrl["step"] }}>
+				{% endif %}
+				<br>
+			{% endfor %}
+		</p>
+
+	</body>
+	</form>
+</html>
