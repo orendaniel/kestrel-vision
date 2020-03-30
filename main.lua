@@ -104,7 +104,6 @@ tcp:settimeout(0)
 local client
 
 while true do
-	print(os.clock())
 	local image = device:readframe()
 	local bin = nil
 	local cnts = {}
