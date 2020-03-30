@@ -121,7 +121,7 @@ while true do
 		
 		elseif conf.threshold.type == "gray" then
 			local gray = kestrel.grayscale(image)
-			bin = hsv:inrange({conf.threshold.lower[1]} or {}, {conf.threshold.upper[1]} or {})
+			bin = hsv:inrange(conf.threshold.lower or {}, conf.threshold.upper or {})
 		end
 		
 		-- if threshold succeeded trace contours
