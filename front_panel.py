@@ -7,98 +7,115 @@ import sys
 import time
 
 app = Flask(__name__)
-#os.popen("lua main.lua /home/pi/Desktop/conf.lua /dev/video0 8080")
 
-'''
+client = None
+
 config = sys.argv[1]
 device = sys.argv[2]
-comm = device.split('/')[-1]
-comm_path = '/tmp/' + comm
-'''
+port = sys.argv[3]
+#os.popen("lua main.lua " + config + " " + device + " " + port)
 
-ctrls = []
-data = subprocess.run(["v4l2-ctl", "--list-ctrls"], stdout=subprocess.PIPE).stdout.decode("utf-8")
-for line in data.splitlines():
+def get_ctrls():
+	ctrls = []
+	data = subprocess.run(["v4l2-ctl", "--list-ctrls"], stdout=subprocess.PIPE).stdout.decode("utf-8")
+	for line in data.splitlines():
+		try:
+			line = " ".join(line.split())
+			tokens = line.split(" ")
+			ctrl = {}
+			ctrl["name"] = tokens[0]
+			ctrl["type"] = tokens[2].replace("(", "").replace(")", "")
+			if ctrl["type"] == "bool":
+				ctrl["default"] = tokens[4].split("=")[1]
+				ctrl["value"] = tokens[5].split("=")[1]
+			elif ctrl["type"] == "menu":
+				ctrl["min"] = tokens[4].split("=")[1]
+				ctrl["max"] = tokens[5].split("=")[1]
+				ctrl["step"] = tokens[6].split("=")[1]
+				ctrl["value"] = tokens[7].split("=")[1]
+			else:
+				ctrl["min"] = tokens[4].split("=")[1]
+				ctrl["max"] = tokens[5].split("=")[1]
+				ctrl["step"] = tokens[6].split("=")[1]
+				ctrl["default"] = tokens[7].split("=")[1]
+				ctrl["value"] = tokens[8].split("=")[1]
+			ctrls.append(ctrl)
+		except:
+			continue
+	return ctrls
+
+def ask_for(name):
 	try:
-		line = " ".join(line.split())
-		tokens = line.split(" ")
-		ctrl = {}
-		ctrl["name"] = tokens[0]
-		ctrl["type"] = tokens[2].replace("(", "").replace(")", "")
-		if ctrl["type"] == "bool":
-			ctrl["default"] = tokens[4].split("=")[1]
-			ctrl["value"] = tokens[5].split("=")[1]
-		elif ctrl["type"] == "menu":
-			ctrl["min"] = tokens[4].split("=")[1]
-			ctrl["max"] = tokens[5].split("=")[1]
-			ctrl["step"] = tokens[6].split("=")[1]
-			ctrl["value"] = tokens[7].split("=")[1]
-		else:
-			ctrl["min"] = tokens[4].split("=")[1]
-			ctrl["max"] = tokens[5].split("=")[1]
-			ctrl["step"] = tokens[6].split("=")[1]
-			ctrl["default"] = tokens[7].split("=")[1]
-			ctrl["value"] = tokens[8].split("=")[1]
-		ctrls.append(ctrl)
-	except:
-		continue
-
-def ask_for(client, name):
-	client.send(("get " + name + "\n").encode("utf-8"))
-	answer = client.recv(1024).decode("utf-8").strip(' ').strip('\n')
-	if answer == 'nil' or answer == '':
-		return None
-	else:
+		global client
+		client.send(("get " + name + "\n").encode("utf-8"))
+		answer = client.recv(1024).decode("utf-8").strip(' ').strip('\n')
 		return answer
+	except:
+		return "nil"
 
-	client.send(("set " + name + " " + str(value) +" \n").encode("utf-8"))
-
-def send(client, msg):
+def send(msg):
+	global client
 	client.send(msg.encode("utf-8"))
 	client.recv(1024)
 
 @app.route('/', methods=["GET", "POST"])
 def index():
-
+	global client	
+	client = None
 	client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-	client.connect(("localhost", 8081))
+	client.connect(("localhost", int(port)))
+	path = os.path.dirname(os.path.realpath(__file__)) + "/static/" + str(port)
+	send("shoot " + path + "\n")
 
 	if request.method == "POST":
-		send(client, "set width " + request.form["width"] +" \n")
-		send(client, "set height " + request.form["height"] +" \n")
-		send(client, "set fps " + request.form["fps"] +" \n")
-		send(client, "set tracesteps " + request.form["tracesteps"] +" \n")
-		send(client, "set thresh type " + request.form["thresh_type"] +" \n")
-		print(request.form["thresh_type"])
-		if request.form["thresh_type"] != "nil":
-			lower_table = "{" + request.form["lower1"] + ", " + request.form["lower2"] + ", " + request.form["lower3"] + "}"
-			upper_table = "{" + request.form["upper1"] + ", " + request.form["upper2"] + ", " + request.form["upper3"] + "}"
-			print("set thresh lower " + lower_table +" \n")
-			print("set thresh upper " + upper_table +" \n")
-			send(client, "set thresh lower " + lower_table +" \n")
-			send(client, "set thresh upper " + upper_table +" \n")
+		send("set width " + (request.form["width"] or "nil") + " \n")
+		send("set height " + (request.form["height"] or "nil") + " \n")
+		send("set fps " + (request.form["fps"] or "nil") + " \n")
+		send("set tracesteps " + (request.form["tracesteps"] or "nil") + " \n")
+		send("set thresh type '" + (request.form["thresh_type"] or "nil") + "' \n")
 
-		send(client, ("save\n"))
+		if request.form["thresh_type"] != "nil":
+			lower_table = "{" + (request.form["lower1"] or "0")+ ", " + (request.form["lower2"] or "0") + ", " + (request.form["lower3"] or "0") + "}"
+			upper_table = "{" + (request.form["upper1"] or "255") + ", " + (request.form["upper2"] or "255") + ", " + (request.form["upper3"] or "255") + "}"
+
+			ratio_table = "{" + (request.form["ratio1"] or "nil") + ", " + (request.form["ratio2"] or "nil") + "}"
+			area_table = "{" + (request.form["area1"] or "nil") + ", " + (request.form["area2"] or "nil") + "}"
+			solidity_table = "{" + (request.form["solidity1"] or "nil") + ", " + (request.form["solidity2"] or "nil") + "}"
+
+			send("set thresh lower " + lower_table +" \n")
+			send("set thresh upper " + upper_table +" \n")
+
+			send("set thresh ratio " + ratio_table +" \n")
+			send("set thresh area " + area_table +" \n")
+			send("set thresh solidity " + solidity_table +" \n")
+		else:
+			send("set threshold nil\n")
+
+		for k, v in request.form.to_dict().items():
+			if "v4l " in k:
+				send("set v4l " + k.split("v4l ")[1] + " " + v + "\n")
+
+		send("save\n")
+		redirect(request.url)
 
 	conf = {}
-	conf["width"] = ask_for(client, "width")
-	conf["height"] = ask_for(client, "height")
-	conf["fps"] = ask_for(client, "fps")
-	conf["trace_steps"] = ask_for(client, "tracesteps")
+	conf["width"] = ask_for("width")
+	conf["height"] = ask_for("height")
+	conf["fps"] = ask_for("fps")
+	conf["trace_steps"] = ask_for("tracesteps")
 
-	conf["threshold_type"] = ask_for(client, "thresh type")
-	print(conf["threshold_type"])
-	
-	conf["lower"] = [ask_for(client, "thresh 1 @ lower"), ask_for(client, "thresh 2 @ lower"), ask_for(client, "thresh 3 @ lower")]
-	conf["upper"] = [ask_for(client, "thresh 1 @ upper"), ask_for(client, "thresh 2 @ upper"), ask_for(client, "thresh 3 @ upper")]
+	conf["threshold_type"] = ask_for("thresh type")
 
-	conf["ratio"] = [ask_for(client, "thresh 1 @ ratio"), ask_for(client, "thresh 2 @ ratio")]
-	conf["area"] = [ask_for(client, "thresh 1 @ area"), ask_for(client, "thresh 2 @ area")]
-	conf["solidity"] = [ask_for(client, "thresh 1 @ solidity"), ask_for(client, "thresh 2 @ solidity")]
+	conf["lower"] = [ask_for("thresh 1 @ lower"), ask_for("thresh 2 @ lower"), ask_for("thresh 3 @ lower")]
+	conf["upper"] = [ask_for("thresh 1 @ upper"), ask_for("thresh 2 @ upper"), ask_for("thresh 3 @ upper")]
+
+	conf["ratio"] = [ask_for("thresh 1 @ ratio"), ask_for("thresh 2 @ ratio")]
+	conf["area"] = [ask_for("thresh 1 @ area"), ask_for("thresh 2 @ area")]
+	conf["solidity"] = [ask_for("thresh 1 @ solidity"), ask_for("thresh 2 @ solidity")]
+
 	client.close()
 
-
-	return render_template('index.html', conf=conf, v4l=ctrls) 
+	return render_template('index.html', conf=conf, v4l=get_ctrls(), port=port) 
 
 
 if __name__ == '__main__':
