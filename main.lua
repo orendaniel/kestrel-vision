@@ -14,7 +14,7 @@ local conffile = arg[1]
 local source = arg[2]
 local port = arg[3]
 
-local conf = {}
+conf = {}
 local device = nil
 local processor = function(image, contours) end
 
@@ -47,6 +47,18 @@ local function tokenize(command)
 	return tokens
 end
 
+function loadv4l()
+	-- set fps
+	if conf.fps ~= nil then os.execute("v4l2-ctl -d ".. source .. " -p " .. tostring(conf.fps)) end
+
+	-- load v4l settings
+	if conf.v4l ~= nil then
+		for i, v in pairs(conf.v4l) do
+			os.execute("v4l2-ctl -d " .. source .. " -c " .. i .. "=" .. tostring(v))
+		end
+	end
+end
+
 -- remove the first N words from string
 local function trimwords(str, d)
 	local res = str
@@ -66,15 +78,7 @@ else
 	device = kestrel.opendevice(source)
 end
 
--- set fps
-if conf.fps ~= nil then os.execute("v4l2-ctl -d ".. source .. " -p " .. tostring(conf.fps)) end
-
--- load v4l settings
-if conf.v4l ~= nil then
-	for i, v in pairs(conf.v4l) do
-		os.execute("v4l2-ctl -d " .. source .. " -c " .. i .. "=" .. tostring(v))
-	end
-end
+loadv4l()
 
 -- load processor function
 if conf.processorfile ~= nil then
@@ -90,6 +94,7 @@ assert(tcp:listen())
 tcp:settimeout(0)
 local client
 
+st = os.clock()
 while true do
 	local image = device:readframe()
 	local bin = nil
@@ -122,27 +127,27 @@ while true do
 		-- remove unwanted contours
 		for i, cnt in pairs(cnts) do
 			local exp = cnt:extreme()
-			local cnt_w = exp[2].x - exp[4].x
-			local cnt_h = exp[3].y - exp[1].y
+			local cnt_w = exp[2].x - exp[4].x +1
+			local cnt_h = exp[3].y - exp[1].y +1
 			local area = cnt:area()
+			local solidity = area / (cnt_w * cnt_h)
+			local ratio = cnt_w / cnt_h
 
 			if conf.threshold.ratio ~= nil then
-				local ratio = cnt_w / cnt_h
 				if ratio < (conf.threshold.ratio[1] or 0) or ratio > (conf.threshold.ratio[2] or math.huge) then
-					cnts[i] = nil
+					table.remove(cnts, i)
 				end
 			end
 
 			if conf.threshold.area ~= nil then
 				if area < (conf.threshold.area[1] or 0) or area > (conf.threshold.area[2] or math.huge) then
-					cnts[i] = nil
+					table.remove(cnts, i)
 				end
 			end
 
 			if conf.threshold.solidity ~= nil then
-				local solidity = area / (cnt_w * cnt_h)
 				if solidity < (conf.threshold.solidity[1] or 0) or solidity > (conf.threshold.solidity[2] or math.huge) then
-					cnts[i] = nil
+					table.remove(cnts, i)
 				end
 			end
 		end
@@ -167,18 +172,16 @@ while true do
 	if command == nil then client = nil 
 	else
 		local tokens = tokenize(command)
-		if command == "quit" then client = nil -- end transmission
-		elseif command == "stop" then break -- stop program
+		if command == "quit!" then client = nil -- end transmission
+		elseif command == "stop!" then break -- stop program
 
-		elseif command == "save" then -- save configuration file
+		elseif command == "save!" then -- save configuration file
 			local file = io.open(conffile, 'w+')
 			file:write("return " .. dump(conf))
 			file:close()
 			client:send("done\n")
 
-		elseif tokens[1] == "shoot" then -- write pixelmap of image and contours to path
-			local path
-			path, _ = trimwords(command, 1)
+		elseif command == "shoot!" then -- write pixelmap of image and contours
 			local w
 			local h
 			_, w, h = image:shape()
@@ -189,48 +192,26 @@ while true do
 					for _, p in pairs(cnts[i]:totable()) do buffer:setat(1, p.x, p.y, 255) end
 				end
 			end
-			kestrel.write_pixelmap(image, path .. "/image.ppm")
-			kestrel.write_pixelmap(buffer, path .. "/contours.ppm")
-			os.execute("convert " .. path .. "/image.ppm " .. path .. "/image.jpg")
-			os.execute("convert " .. path .. "/contours.ppm " .. path .. "/contours.jpg")
+
+			kestrel.write_pixelmap(image, "image.ppm")
+			kestrel.write_pixelmap(buffer, "contours.ppm")
+			os.execute("convert image.ppm contours.ppm +append " .. port .. "result.jpg")
+			os.execute("rm image.ppm contours.ppm")
 			client:send("done\n")
 
-		elseif tokens[1] == "set" then
-			if tokens[2] == "v4l" then
-				if conf.v4l == nil then conf.v4l = {} end
-				conf.v4l[tokens[3]] = load("return " .. trimwords(command, 3))()
-				os.execute("v4l2-ctl -d " .. source .. " -c " .. tokens[3] .. "=" .. tostring(conf.v4l[tokens[3]]))
+		else
+			local exec = load(command)
+			if exec ~= nil then 
+				local status, result = pcall(exec)
+				if status then client:send(dump(result) .. "\n")
 
-			elseif tokens[2] == "thresh" then
-				if conf.threshold == nil then conf.threshold = {} end
-				conf.threshold[tokens[3]] = load("return " .. trimwords(command, 3))()
+				else client:send("error running command\n") end
 
 			else
-				conf[tokens[2]] = load("return " .. trimwords(command, 2))()
-
+				client:send("invalid command\n")
 			end
-			client:send("done\n")
+			
 
-		elseif tokens[1] == "get" then
-			if tokens[2] == "v4l" then
-				if conf.v4l == nil then conf.v4l = {} end
-				client:send(dump(conf.v4l[tokens[3]]) .. "\n")
-
-			elseif tokens[2] == "thresh" then
-				if conf.threshold == nil then conf.threshold = {} end
-				if tokens[4] == "@" then
-					local index= tonumber(tokens[3])
-					if conf.threshold[tokens[5]] == nil then conf.threshold[tokens[5]] = {} end
-					client:send(dump(conf.threshold[tokens[5]][index]) .. "\n")
-
-				else
-					client:send(dump(conf.threshold[tokens[3]]) .. "\n")
-
-				end
-			else
-				client:send(dump(conf[tokens[2]]) .. "\n")
-
-			end
 		end
 	end
 end
