@@ -1,13 +1,29 @@
 #!/usr/bin/lua5.3
 
+--[[
+Kestrel
+Copyright (C) 2020  Oren Daniel
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+]]--
+
 kestrel = require "kestrel"
 local socket = require "socket"
 
 --[[
 program requires 3 parameters
-configuration path
-video source
-communication port
+configuration path, video source, communication port
 ]]--
 
 local conffile = arg[1]
@@ -17,6 +33,19 @@ local port = arg[3]
 conf = {}
 local device = nil
 local processor = function(image, contours) end
+
+
+local function loadv4l()
+	-- set fps
+	if conf.fps ~= nil then os.execute("v4l2-ctl -d ".. source .. " -p " .. tostring(conf.fps)) end
+
+	-- load v4l settings
+	if conf.v4l ~= nil then
+		for i, v in pairs(conf.v4l) do
+			os.execute("v4l2-ctl -d " .. source .. " -c " .. i .. "=" .. tostring(v))
+		end
+	end
+end
 
 -- returns a string in parsable format
 local function dump(t)
@@ -38,28 +67,7 @@ local function dump(t)
 	else return "nil" end
 end
 
--- tokenize a string
-local function tokenize(command) 
-	local tokens = {}
-	for t in string.gmatch(command, '[^%s]+') do
-		table.insert(tokens, t)
-	end
-	return tokens
-end
-
-function loadv4l()
-	-- set fps
-	if conf.fps ~= nil then os.execute("v4l2-ctl -d ".. source .. " -p " .. tostring(conf.fps)) end
-
-	-- load v4l settings
-	if conf.v4l ~= nil then
-		for i, v in pairs(conf.v4l) do
-			os.execute("v4l2-ctl -d " .. source .. " -c " .. i .. "=" .. tostring(v))
-		end
-	end
-end
-
--- remove the first N words from string
+-- remove the N words from string
 local function trimwords(str, d)
 	local res = str
 	for i=1,d do res, _ = res:gsub('^.-%s', '', 1) end
@@ -71,6 +79,8 @@ if io.open(conffile, 'r') ~= nil then
 	conf = dofile(conffile)
 end
 
+loadv4l()
+
 -- open device
 if conf.width ~= nil and conf.height ~= nil then
 	device = kestrel.opendevice(source, conf.width, conf.height)
@@ -78,7 +88,6 @@ else
 	device = kestrel.opendevice(source)
 end
 
-loadv4l()
 
 -- load processor function
 if conf.processorfile ~= nil then
@@ -89,13 +98,13 @@ end
 
 -- setup communication socket
 local tcp = socket.tcp()
-assert(tcp:bind("localhost", port))
+assert(tcp:bind("0.0.0.0", port))
 assert(tcp:listen())
 tcp:settimeout(0)
 local client
 
-st = os.clock()
 while true do
+	print(os.clock())
 	local image = device:readframe()
 	local bin = nil
 	local cnts = {}
@@ -171,15 +180,19 @@ while true do
 	-- parse command
 	if command == nil then client = nil 
 	else
-		local tokens = tokenize(command)
-		if command == "quit!" then client = nil -- end transmission
+		if command == "quit!" then 
+			client:close() 
+			client = nil -- end transmission
+
 		elseif command == "stop!" then break -- stop program
 
 		elseif command == "save!" then -- save configuration file
 			local file = io.open(conffile, 'w+')
-			file:write("return " .. dump(conf))
-			file:close()
-			client:send("done\n")
+			if file ~= nil then
+				file:write("return " .. dump(conf))
+				file:close()
+				client:send("done\n")
+			end
 
 		elseif command == "shoot!" then -- write pixelmap of image and contours
 			local w
@@ -199,6 +212,15 @@ while true do
 			os.execute("rm image.ppm contours.ppm")
 			client:send("done\n")
 
+		elseif command == "restartdevice!" then -- restart device
+			loadv4l()
+			device:close()
+			if conf.width ~= nil and conf.height ~= nil then
+				device = kestrel.opendevice(source, conf.width, conf.height)
+
+			else device = kestrel.opendevice(source) end
+			client:send("done\n")
+
 		else
 			local exec = load(command)
 			if exec ~= nil then 
@@ -210,7 +232,6 @@ while true do
 			else
 				client:send("invalid command\n")
 			end
-			
 
 		end
 	end
