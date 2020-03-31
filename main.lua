@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ]]--
 
 kestrel = require "kestrel"
-local socket = require "socket"
+local unixsocket = require "socket.unix"
 
 --[[
 program requires 3 parameters
@@ -28,7 +28,7 @@ configuration path, video source, communication port
 
 local conffile = arg[1]
 local source = arg[2]
-local port = arg[3]
+local commpath = arg[3]
 
 conf = {}
 local device = nil
@@ -79,6 +79,7 @@ if io.open(conffile, 'r') ~= nil then
 	conf = dofile(conffile)
 end
 
+-- load v4l after loading settings
 loadv4l()
 
 -- open device
@@ -97,11 +98,11 @@ if conf.processorfile ~= nil then
 end
 
 -- setup communication socket
-local tcp = socket.tcp()
-assert(tcp:bind("0.0.0.0", port))
-assert(tcp:listen())
-tcp:settimeout(0)
-local client
+local socket = unixsocket()
+assert(socket:bind(commpath .. "/socket"))
+assert(socket:listen())
+local client = socket:accept()
+client:settimeout(0)
 
 while true do
 	local image = device:readframe()
@@ -132,7 +133,7 @@ while true do
 			end
 		end
 		
-		-- remove unwanted contours
+		-- filter contours
 		for i, cnt in pairs(cnts) do
 			local exp = cnt:extreme()
 			local cnt_w = exp[2].x - exp[4].x +1
@@ -164,26 +165,13 @@ while true do
 	-- pass result to processor function
 	if processor(image, cnts or {}) ~= nil then break end
 
-	--[[
-	tcp communication
-	freeze loop if client is connected
-	return when transmission ends
-	]]--
-	local command = nil
-	if client == nil then client = tcp:accept() end	
-	
-	if client ~= nil then
-		command = client:receive()
-	end
+	local command = client:receive()
 
 	-- parse command
-	if command == nil then client = nil 
-	else
-		if command == "quit!" then 
-			client:close() 
-			client = nil -- end transmission
-
-		elseif command == "stop!" then break -- stop program
+	if command ~= nil then
+		if command == "stop!" then -- stop program
+			client:send("stopped\n")
+			break
 
 		elseif command == "save!" then -- save configuration file
 			local file = io.open(conffile, 'w+')
@@ -205,19 +193,22 @@ while true do
 				end
 			end
 
-			kestrel.write_pixelmap(image, "image.ppm")
-			kestrel.write_pixelmap(buffer, "contours.ppm")
-			os.execute("convert image.ppm contours.ppm +append " .. port .. "result.jpg")
-			os.execute("rm image.ppm contours.ppm")
+			kestrel.write_pixelmap(image, commpath .. "/image.ppm")
+			kestrel.write_pixelmap(buffer, commpath .. "/contours.ppm")
+			os.execute("convert " .. commpath .. "/*.ppm +append " .. commpath .. "/result.jpg")
+			os.execute("rm " .. commpath .. "/*.ppm")
 			client:send("done\n")
 
 		elseif command == "restartdevice!" then -- restart device
-			loadv4l()
 			device:close()
 			if conf.width ~= nil and conf.height ~= nil then
 				device = kestrel.opendevice(source, conf.width, conf.height)
 
 			else device = kestrel.opendevice(source) end
+			client:send("done\n")
+
+		elseif command == "loadv4l!" then -- update v4l settings
+			loadv4l()
 			client:send("done\n")
 
 		else
@@ -236,5 +227,5 @@ while true do
 	end
 end
 
-tcp:close()
+socket:close()
 device:close()

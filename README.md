@@ -1,6 +1,6 @@
 ##Kestrel vision program
 
-Kestrel vision is a scriptable vision program based on kestrel vision library.
+Kestrel vision is a scriptable vision program based on Kestrel vision library.
 
 Kestrel vision library
 https://gitlab.com/oren_daniel/kestrel-lib
@@ -14,8 +14,7 @@ ImageMagick
 
 v4l2-ctl
 
-
-front panel also requires:
+lua socket
 
 Python
 
@@ -41,68 +40,64 @@ return processor
 
 Then write your config file
 you can leave it empty and configure kestrel later 
-or you can write it yourself, however you must create it
+or you can write it yourself.
 
-Now you can simply run main.lua using:
+A human readable config file can be found in examples folder.
 
-./main.lua config_file video_source communication_port
+now run:
 
-for example
-
-./main.lua ~/conf.lua /dev/video0 8080
-
-And kestrel is now running.
- 
-you can communicate with it be connecting to the TCP port with netcat in unix or telnet in windows.
+./kestrel.py <config file> <video source> <communication port> <web port>
 
 for example
 
-netcat address communication_port
+./kestrel.py ~/conf.lua /dev/video0 8080 80
 
-the program will now stop execution and wait for your commands, as long as you are connected.
+Now kestrel is running.
 
-#list of commands
------------------
+You can now open your browser and go the address:
+
+http://<ip_address_of_your_computer>:<web port>
+
+and you will see the output of your program.
+
+the output of shoot! (see commands later) can be viewed in:
+
+http://<ip_address_of_your_computer>:<web port>/images
+
+now open netcat (for unix) or telnet (for windows) and connect to
+the communication port.
+
+netcat <ip_address_of_your_computer> <communication port>
+
+and you can now enter commands to kestrel.
+
+#Commands
 
 stop! --> stops kestrel
 
-quit! --> end transmission and returns control to kestrel
-
-save! --> save current configure (overwrittes config_file)
+save! --> save current configure (overwrittes config file)
 
 shoot! --> returns a jpg of the image taken by the camera and the contours selected
 
 restartdevice! --> restarts the device and reloads v4l settings
 
+loadv4l! --> reloads v4l settings and sets FPS
 
-the config table conf is a global variable and it can be accessed from 
-your script or by using you.
-
-
-##Running the web front panel
+the config table "conf" is a global variable and it can be accessed by 
+your script or manually.
 
 
-Although you can run main.lua as a standalone script, it is recommended that you would use the front panel.
+Any other command is executed as a lua command
+so for example you can change the camera resolution by:
 
-The front panel is used to view the output of your program
-so if for example, you used the print command in you script it
-will redirect it to the front panel.
+return conf.width -- get current value
 
-you can view the image taken by shoot! command from the front panel as well.
+return conf.height
 
-you can run the front panel by:
+conf.width = 320
 
-./front_panel.py config_file video_source communication_port web_port
+conf.height = 240
 
-for example
+restartdevice!
 
-./front_panel.py ~/conf.lua /dev/video0 8080 80
-
-you can now view the output of your program from the browser by going to the link
-
-http://your_process_ip_address:web_port/
-
-and view the output of shoot! in
-
-http://your_process_ip_address:web_port/result
-
+shoot!
