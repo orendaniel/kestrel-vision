@@ -89,7 +89,7 @@ def communication():
 						os.system("rm -r " + communication_path)
 					client.send(answer)
 		except:
-			print("communication ended")
+			pass
 
 		time.sleep(REFRESH_RATE)
 
