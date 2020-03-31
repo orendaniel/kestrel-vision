@@ -8,7 +8,11 @@ conf.tracesteps = 3
 conf.processorfile = 'processor.lua'
 
 conf.v4l = {
-	["brightness"] = 0,
+	["brightness"] = 0, -- for example
+	--[[
+	please refer to v4l2-ctl to view 
+	the controls that your camera supports
+	]]--
 }
 
 

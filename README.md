@@ -38,11 +38,11 @@ end
 return processor
 
 
-Then write your config file
+Then write your config file (.lua file)
 you can leave it empty and configure kestrel later 
 or you can write it yourself.
 
-A human readable config file can be found in examples folder.
+A human readable config file can be found in the examples folder.
 
 now run:
 
@@ -54,22 +54,25 @@ for example
 
 Now kestrel is running.
 
-You can now open your browser and go the address:
+You can open your browser and go the link:
 
 http://<ip_address_of_your_computer>:<web port>
 
 and you will see the output of your program.
 
-the output of shoot! (see commands later) can be viewed in:
+the output of shoot! (see Commands) can be viewed in:
 
 http://<ip_address_of_your_computer>:<web port>/images
 
-now open netcat (for unix) or telnet (for windows) and connect to
+There is no need to refresh the web page after a shoot! command,
+the page will refresh itself automatically.
+
+Now open netcat (for unix) or telnet (for windows) and connect to
 the communication port.
 
 netcat <ip_address_of_your_computer> <communication port>
 
-and you can now enter commands to kestrel.
+And you can now enter commands to kestrel.
 
 #Commands
 
@@ -83,8 +86,7 @@ restartdevice! --> restarts the device and reloads v4l settings
 
 loadv4l! --> reloads v4l settings and sets FPS
 
-the config table "conf" is a global variable and it can be accessed by 
-your script or manually.
+the config table "conf" is a global variable and it can be accessed by you or your script.
 
 
 Any other command is executed as a lua command
@@ -101,3 +103,20 @@ conf.height = 240
 restartdevice!
 
 shoot!
+
+
+#Temporary Files
+
+This program consists of two parts: a lua part and python part.
+
+The lua part runs the vision processor, handles the config file, etc. 
+While the python part handles the web front end, and receives communication from user.
+
+The two parts "talk" using a unix domain socket. 
+
+You will also notice that Kestrel creates a temporary folder (by default at /tmp/kestrel),
+which contains the socket file and the output of shoot!.
+Kestrel deletes them when you send a stop! command or when the program quits (if processor returns non nil).
+
+However if the program is terminated unexpectedly it will not delete them.
+ 
