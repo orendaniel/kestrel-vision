@@ -31,7 +31,7 @@ BUFFER= 4096
 PATH_PREFIX = "/tmp/kestrel/"
 REFRESH_RATE = 1 #seconds
 
-controller = flask.Flask(__name__)
+web = flask.Flask(__name__)
 
 conf_file = sys.argv[1]
 source = sys.argv[2]
@@ -58,6 +58,7 @@ try:
 except Exception as e:
 	print(e)
 	print("cannot open unix socket")
+	exit(1)
 
 #start tcp server
 try:
@@ -67,6 +68,7 @@ try:
 except Exception as e:
 	print(e)
 	print("cannot open tcp socket")
+	exit(1)
 
 #receive messages from tcp and redirect them to unix socket
 #then return the result
@@ -74,22 +76,22 @@ def communication():
 	client = None
 	msg = None
 	while True:
-		try:
-			if client == None:
-				client, _ = tcp_socket.accept()
+		if client == None:
+			client, _ = tcp_socket.accept()
 
-			if client != None:
-				msg = client.recv(BUFFER)
-				if not msg:
-					client = None
-				else:
-					unix_client.send(msg)
-					answer = unix_client.recv(BUFFER)
-					if answer.decode("utf-8").strip("\n").strip(" ") == "stopped":
-						os.system("rm -r " + communication_path)
-					client.send(answer)
-		except:
-			pass
+		if client != None:
+			msg = client.recv(BUFFER)
+			if not msg:
+				client = None
+			else:
+				unix_client.send(msg)
+				answer = unix_client.recv(BUFFER)
+				if answer.decode("utf-8").strip("\n").strip(" ") == "stopped":
+					os.system("rm -r " + communication_path)
+					print("stopped")
+					break
+
+				client.send(answer)
 
 		time.sleep(REFRESH_RATE)
 
@@ -99,7 +101,7 @@ thread.daemon = True
 thread.start()
 
 #show program output
-@controller.route('/')
+@web.route('/')
 def stream():
 	def read():
 		while group.is_pending():
@@ -119,9 +121,9 @@ def image_gen():
 				frame = file.read()
 		yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame + b'\r\n'
 
-@controller.route('/image')
+@web.route('/image')
 def video_feed():
 	return flask.Response(image_gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 	
 if __name__ == "__main__":
-	controller.run(host="0.0.0.0", port=int(web_port))
+	web.run(host="0.0.0.0", port=int(web_port))
