@@ -16,7 +16,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-]]--
+]]
 
 kestrel = require "kestrel"
 local unixsocket = require "socket.unix"
@@ -24,7 +24,7 @@ local unixsocket = require "socket.unix"
 --[[
 program requires 3 parameters
 configuration path, video source, communication port
-]]--
+]]
 
 local conffile = arg[1]
 local source = arg[2]
