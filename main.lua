@@ -143,19 +143,22 @@ while true do
 			local ratio = cnt_w / cnt_h
 
 			if conf.threshold.ratio ~= nil then
-				if ratio < (conf.threshold.ratio[1] or 0) or ratio > (conf.threshold.ratio[2] or math.huge) then
+				if (ratio < (conf.threshold.ratio[1] or 0)) or
+					(ratio > (conf.threshold.ratio[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
 
 			if conf.threshold.area ~= nil then
-				if area < (conf.threshold.area[1] or 0) or area > (conf.threshold.area[2] or math.huge) then
+				if (area < (conf.threshold.area[1] or 0)) or
+					(area > (conf.threshold.area[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
 
 			if conf.threshold.solidity ~= nil then
-				if solidity < (conf.threshold.solidity[1] or 0) or solidity > (conf.threshold.solidity[2] or math.huge) then
+				if (solidity < (conf.threshold.solidity[1] or 0)) or 
+					(solidity > (conf.threshold.solidity[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
