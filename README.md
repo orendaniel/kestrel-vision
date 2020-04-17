@@ -1,4 +1,4 @@
-##Kestrel vision program
+## Kestrel vision program
 
 Kestrel vision is a scriptable vision program based on Kestrel vision library.
 
@@ -6,7 +6,7 @@ Kestrel vision library
 https://gitlab.com/oren_daniel/kestrel-lib
 
 
-##Dependencies
+## Dependencies
 
 Kestrel (libv4l, lua 5.3)
 
@@ -24,7 +24,7 @@ shelljob
 
 
 
-##Using Kestrel
+## Using Kestrel
 
 Firstly write you lua script for example:
 
@@ -74,7 +74,7 @@ netcat <ip_address_of_your_computer> <communication port>
 
 And you can now enter commands to kestrel.
 
-#Commands
+# Commands
 
 stop! --> stops kestrel
 
@@ -105,7 +105,7 @@ restartdevice!
 shoot!
 
 
-#Temporary Files
+# Temporary Files
 
 This program consists of two parts: a lua part and python part.
 
