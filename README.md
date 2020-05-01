@@ -62,7 +62,7 @@ and you will see the output of your program.
 
 the output of shoot! (see Commands) can be viewed in:
 
-http://<ip_address_of_your_computer>:<web port>/images
+http://<ip_address_of_your_computer>:<web port>/image
 
 There is no need to refresh the web page after a shoot! command,
 the page will refresh itself automatically.
