@@ -229,8 +229,6 @@ while true do
 		end
 	end
 
-	collectgarbage("collect")
-
 end
 
 socket:close()
