@@ -22,7 +22,7 @@ conf.threshold = {
 	["upper"] = {255, 255, 255},
 	["ratio"] = {0, math.huge},
 	["area"] = {0, math.huge},
-	["solidity"] = {0, math.huge}
+	["extent"] = {0, math.huge}
 }
 
 

@@ -139,7 +139,7 @@ while true do
 			local cnt_w = exp[2].x - exp[4].x +1
 			local cnt_h = exp[3].y - exp[1].y +1
 			local area = cnt:area()
-			local solidity = area / (cnt_w * cnt_h)
+			local extent = area / (cnt_w * cnt_h)
 			local ratio = cnt_w / cnt_h
 
 			if conf.threshold.ratio ~= nil then
@@ -156,9 +156,9 @@ while true do
 				end
 			end
 
-			if conf.threshold.solidity ~= nil then
-				if (solidity < (conf.threshold.solidity[1] or 0)) or 
-					(solidity > (conf.threshold.solidity[2] or math.huge)) then
+			if conf.threshold.extent ~= nil then
+				if (extent < (conf.threshold.extent[1] or 0)) or 
+					(extent > (conf.threshold.extent[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
