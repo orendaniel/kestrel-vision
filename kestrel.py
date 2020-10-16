@@ -4,8 +4,7 @@
 Kestrel vision
 Copyright (C) 2020  Oren Daniel
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the BSD 3-Clause License
+This file is licensed under the terms of the BSD 3-Clause License.
 '''
 
 import flask
