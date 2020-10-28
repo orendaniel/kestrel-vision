@@ -40,9 +40,11 @@ try:
 	unix_client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 	#try to connect
 	while True: 		
+		print("Trying to connect to unix socket")
 		if os.path.exists(communication_path + "/socket"):
 			unix_client.connect(communication_path + "/socket")
 			break
+		time.sleep(0.5)
 
 except Exception as e:
 	print(e)

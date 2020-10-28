@@ -19,18 +19,20 @@ local conffile = arg[1]
 local source = arg[2]
 local commpath = arg[3]
 
-conf = {}
+_conf = {}
 local device = nil
 local processor = function(image, contours) end
 
 
 local function loadv4l()
 	-- set fps
-	if conf.fps ~= nil then os.execute("v4l2-ctl -d ".. source .. " -p " .. tostring(conf.fps)) end
+	if _conf.fps ~= nil then 
+		os.execute("v4l2-ctl -d " .. source .. " -p " .. tostring(_conf.fps))
+	end
 
 	-- load v4l settings
-	if conf.v4l ~= nil then
-		for i, v in pairs(conf.v4l) do
+	if _conf.v4l ~= nil then
+		for i, v in pairs(_conf.v4l) do
 			os.execute("v4l2-ctl -d " .. source .. " -c " .. i .. "=" .. tostring(v))
 		end
 	end
@@ -65,24 +67,24 @@ end
 
 -- load config
 if io.open(conffile, 'r') ~= nil then
-	conf = dofile(conffile)
+	_conf = dofile(conffile)
 end
 
 -- load v4l after loading settings
 loadv4l()
 
 -- open device
-if conf.width ~= nil and conf.height ~= nil then
-	device = kestrel.opendevice(source, conf.width, conf.height)
+if _conf.width ~= nil and _conf.height ~= nil then
+	device = kestrel.opendevice(source, _conf.width, _conf.height)
 else
 	device = kestrel.opendevice(source)
 end
 
 
 -- load processor function
-if conf.processorfile ~= nil then
-	if io.open(conf.processorfile, 'r') ~= nil then
-		processor = dofile(conf.processorfile)
+if _conf.processorfile ~= nil then
+	if io.open(_conf.processorfile, 'r') ~= nil then
+		processor = dofile(_conf.processorfile)
 	end
 end
 
@@ -98,25 +100,25 @@ while true do
 	local bin = nil
 	local cnts = {}
 	
-	if conf.threshold ~= nil then
+	if _conf.threshold ~= nil then
 		-- rgb threshold
-		if conf.threshold.type == "rgb" then
-			bin = image:inrange(conf.threshold.lower or {}, conf.threshold.upper or {})
+		if _conf.threshold.type == "rgb" then
+			bin = image:inrange(_conf.threshold.lower or {}, _conf.threshold.upper or {})
 		
 		-- hsv threshold
-		elseif conf.threshold.type == "hsv" then
+		elseif _conf.threshold.type == "hsv" then
 			local hsv = kestrel.rgb_to_hsv(image)
-			bin = hsv:inrange(conf.threshold.lower or {}, conf.threshold.upper or {})
+			bin = hsv:inrange(_conf.threshold.lower or {}, _conf.threshold.upper or {})
 		
-		elseif conf.threshold.type == "gray" then
+		elseif _conf.threshold.type == "gray" then
 			local gray = kestrel.grayscale(image)
-			bin = hsv:inrange(conf.threshold.lower or {}, conf.threshold.upper or {})
+			bin = hsv:inrange(_conf.threshold.lower or {}, _conf.threshold.upper or {})
 		end
 		
 		-- if threshold succeeded trace contours
 		if bin ~= nil then
-			if (conf.tracesteps or 0) > 0 then 
-				cnts = kestrel.findcontours(bin, conf.tracesteps, conf.tracesteps)
+			if (_conf.tracesteps or 0) > 0 then 
+				cnts = kestrel.findcontours(bin, _conf.tracesteps, _conf.tracesteps)
 			else
 				cnts = kestrel.findcontours(bin) 
 			end
@@ -131,23 +133,23 @@ while true do
 			local extent = area / (cnt_w * cnt_h)
 			local ratio = cnt_w / cnt_h
 
-			if conf.threshold.ratio ~= nil then
-				if (ratio < (conf.threshold.ratio[1] or 0)) or
-					(ratio > (conf.threshold.ratio[2] or math.huge)) then
+			if _conf.threshold.ratio ~= nil then
+				if (ratio < (_conf.threshold.ratio[1] or 0)) or
+					(ratio > (_conf.threshold.ratio[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
 
-			if conf.threshold.area ~= nil then
-				if (area < (conf.threshold.area[1] or 0)) or
-					(area > (conf.threshold.area[2] or math.huge)) then
+			if _conf.threshold.area ~= nil then
+				if (area < (_conf.threshold.area[1] or 0)) or
+					(area > (_conf.threshold.area[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
 
-			if conf.threshold.extent ~= nil then
-				if (extent < (conf.threshold.extent[1] or 0)) or 
-					(extent > (conf.threshold.extent[2] or math.huge)) then
+			if _conf.threshold.extent ~= nil then
+				if (extent < (_conf.threshold.extent[1] or 0)) or 
+					(extent > (_conf.threshold.extent[2] or math.huge)) then
 					table.remove(cnts, i)
 				end
 			end
@@ -168,7 +170,7 @@ while true do
 		elseif command == "save!" then -- save configuration file
 			local file = io.open(conffile, 'w+')
 			if file ~= nil then
-				file:write("return " .. dump(conf))
+				file:write("return " .. dump(_conf))
 				file:close()
 				client:send("done\n")
 			end
@@ -193,8 +195,8 @@ while true do
 
 		elseif command == "restartdevice!" then -- restart device
 			device:close()
-			if conf.width ~= nil and conf.height ~= nil then
-				device = kestrel.opendevice(source, conf.width, conf.height)
+			if _conf.width ~= nil and _conf.height ~= nil then
+				device = kestrel.opendevice(source, _conf.width, _conf.height)
 
 			else device = kestrel.opendevice(source) end
 			client:send("done\n")
