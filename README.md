@@ -8,7 +8,7 @@ https://gitlab.com/oren_daniel/kestrel-lib
 
 ## Dependencies
 
-Kestrel (libv4l, lua 5.3)
+Kestrel (libv4l, lua)
 
 ImageMagick
 
