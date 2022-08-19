@@ -3,7 +3,7 @@
 Kestrel vision is a scriptable vision program based on Kestrel vision library.
 
 Kestrel vision library
-https://gitlab.com/oren_daniel/kestrel-lib
+https://github.com/orendaniel/kestrel-lib
 
 
 ## Dependencies
